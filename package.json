@@ -1,0 +1,14 @@
+{
+  "name": "buildtrack",
+  "version": "1.0.0",
+  "description": "Real-Time Construction-Site Safety Monitoring System",
+  "private": true,
+  "scripts": {
+    "start": "./start.sh",
+    "dev": "./start.sh",
+    "dev:sim": "./start.sh --with-sim",
+    "frontend": "cd frontend && npm run dev",
+    "backend": "cd backend && source .venv/bin/activate && python -m app.cli api"
+  }
+}
+

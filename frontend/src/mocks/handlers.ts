@@ -440,6 +440,60 @@ export const handlers = [
     ]);
   }),
 
+  http.post("*/api/v1/rules", async ({ request }) => {
+    const body = (await request.json()) as any;
+    return HttpResponse.json(
+      {
+        id: `rule-${Date.now()}`,
+        name: body.name || "Custom Rule",
+        sensor_type: body.sensor_type || "gas",
+        operator: body.operator || ">",
+        threshold_val1: body.threshold_val1 ?? 50,
+        threshold_val2: body.threshold_val2 ?? null,
+        duration_seconds: body.duration_seconds ?? 0,
+        severity: body.severity || "warning",
+        is_enabled: true,
+        cooldown_seconds: body.cooldown_seconds ?? 300,
+        auto_create_incident: Boolean(body.auto_create_incident),
+        site_id: body.site_id || null,
+        zone_id: body.zone_id || null,
+        description: body.description || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { status: 201 }
+    );
+  }),
+
+  http.post("*/api/v1/rules/:id/toggle", () => {
+    return HttpResponse.json({ status: "ok", message: "Rule toggled" });
+  }),
+
+  http.delete("*/api/v1/rules/:id", () => {
+    return HttpResponse.json({ status: "ok", message: "Rule deleted successfully" });
+  }),
+
+  http.post("*/api/v1/rules/test", async ({ request }) => {
+    const body = (await request.json()) as any;
+    const val = Number(body.test_value);
+    const thresh = Number(body.threshold_val1);
+    let matched = false;
+    if (body.operator === ">") matched = val > thresh;
+    else if (body.operator === ">=") matched = val >= thresh;
+    else if (body.operator === "<") matched = val < thresh;
+    else if (body.operator === "<=") matched = val <= thresh;
+    else if (body.operator === "==") matched = val === thresh;
+    else if (body.operator === "!=") matched = val !== thresh;
+
+    return HttpResponse.json({
+      matched,
+      operator: body.operator,
+      threshold_val1: thresh,
+      test_value: val,
+      message: matched ? "Rule condition met" : "Rule condition not met",
+    });
+  }),
+
   // CV Config
   http.get("*/api/v1/cv/config", () => {
     return HttpResponse.json({

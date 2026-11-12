@@ -19,11 +19,13 @@ start.bat
 1. Verifies backing services (PostgreSQL, MongoDB, Redis, Mosquitto) and starts them if needed.
 2. Checks/initializes `.venv` and Python dependencies.
 3. Automatically runs database migrations (`python -m app.cli migrate`).
-4. Launches all 4 required backend server roles concurrently:
+4. Launches the Next.js frontend and all 4 required backend server roles concurrently:
+   - **Next.js Control Room UI** (`http://localhost:3000`)
    - **REST API & Socket.IO server** (`http://localhost:8000`)
    - **Stream Processing Worker** (Redis streams, rule engine, 1-minute KPI rollups)
    - **MQTT Consumer** (Mosquitto subscriber on port 1883)
    - **Video Stream Handler** (CCTV camera frames & CV PPE inference)
+   - *(Optional with `--with-sim`)*: **Device & Camera Simulator** (`http://localhost:8090`)
 5. Cleanly stops all background processes when you press `Ctrl+C`.
 
 ---
@@ -32,6 +34,7 @@ start.bat
 
 | Resource | URL |
 |---|---|
+| **Control Room Dashboard** | `http://localhost:3000` |
 | **Swagger API Docs** | `http://localhost:8000/docs` |
 | **ReDoc** | `http://localhost:8000/redoc` |
 | **OpenAPI Schema** | `http://localhost:8000/openapi.json` |
@@ -51,9 +54,14 @@ start.bat
 
 ## 🧪 Run Tests
 
-To run the automated test suite (63 backend tests; uses isolated `*_test` databases, never your dev data):
+To run the automated test suite (88 backend tests and 9 frontend tests; uses isolated `*_test` databases, never your dev data):
 ```bash
+# Backend tests
 cd backend
 source .venv/bin/activate
 pytest -v
+
+# Frontend tests
+cd ../frontend
+npm test
 ```

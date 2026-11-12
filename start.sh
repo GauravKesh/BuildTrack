@@ -30,6 +30,17 @@ if [ ! -f "${BACKEND_DIR}/.env" ]; then
     cp "${BACKEND_DIR}/.env.example" "${BACKEND_DIR}/.env"
 fi
 
+FRONTEND_DIR="${ROOT_DIR}/frontend"
+if [ ! -f "${FRONTEND_DIR}/.env.local" ] && [ -f "${FRONTEND_DIR}/.env.example" ]; then
+    echo ">> frontend/.env.local not found. Creating from .env.example..."
+    cp "${FRONTEND_DIR}/.env.example" "${FRONTEND_DIR}/.env.local"
+fi
+
+if [ -d "${FRONTEND_DIR}" ] && [ ! -d "${FRONTEND_DIR}/node_modules" ] && command -v npm >/dev/null 2>&1; then
+    echo ">> Installing frontend dependencies (npm install)..."
+    (cd "${FRONTEND_DIR}" && npm install)
+fi
+
 # 3. Pre-flight backing service verification
 check_port() {
     local host=$1
@@ -125,6 +136,8 @@ cleanup() {
     trap - SIGINT SIGTERM EXIT
     for pid in "${PIDS[@]}"; do
         if kill -0 "${pid}" 2>/dev/null; then
+            # Terminate child processes (e.g. npm/node subprocesses)
+            pkill -P "${pid}" 2>/dev/null || true
             kill -TERM "${pid}" 2>/dev/null || true
         fi
     done
@@ -135,7 +148,7 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM EXIT
 
-# Check if port 8000 is already occupied by a previous BuildTrack instance
+# Check if ports 8000 or 3000 are already occupied by previous instances
 if check_port "127.0.0.1" 8000; then
     echo ">> Port 8000 is occupied. Terminating previous instance for clean restart..."
     EXISTING_PIDS=$(lsof -ti :8000 2>/dev/null || true)
@@ -144,23 +157,39 @@ if check_port "127.0.0.1" 8000; then
         sleep 1
     fi
 fi
+if check_port "127.0.0.1" 3000; then
+    echo ">> Port 3000 is occupied. Terminating previous instance for clean restart..."
+    EXISTING_FE_PIDS=$(lsof -ti :3000 2>/dev/null || true)
+    if [ -n "${EXISTING_FE_PIDS}" ]; then
+        kill -9 ${EXISTING_FE_PIDS} 2>/dev/null || true
+        sleep 1
+    fi
+fi
 
-# 6. Launch All Server Roles
-echo ">> [1/4] Starting REST API Gateway & Socket.IO Server (/live)..."
+# 6. Launch All Services (Backend Roles + Frontend UI)
+echo ">> [1/5] Starting REST API Gateway & Socket.IO Server (http://localhost:8000)..."
 "${PYTHON}" -m app.cli api &
 PIDS+=($!)
 
-echo ">> [2/4] Starting Stream Processing & KPI Rollup Worker..."
+echo ">> [2/5] Starting Stream Processing & KPI Rollup Worker..."
 "${PYTHON}" -m app.cli worker &
 PIDS+=($!)
 
-echo ">> [3/4] Starting MQTT Ingestion Consumer..."
+echo ">> [3/5] Starting MQTT Ingestion Consumer..."
 "${PYTHON}" -m app.cli mqtt-consumer &
 PIDS+=($!)
 
-echo ">> [4/4] Starting Video Stream & CV PPE Safety Handler..."
+echo ">> [4/5] Starting Video Stream & CV PPE Safety Handler..."
 "${PYTHON}" -m app.cli video-handler &
 PIDS+=($!)
+
+echo ">> [5/5] Starting Next.js Control Room Frontend (http://localhost:3000)..."
+if [[ "$*" != *"--no-frontend"* ]] && [ -d "${FRONTEND_DIR}" ] && command -v npm >/dev/null 2>&1; then
+    (cd "${FRONTEND_DIR}" && npm run dev) &
+    PIDS+=($!)
+else
+    echo "   ⚠️  Skipping frontend launch (--no-frontend or npm not found in PATH)."
+fi
 
 # Optional: IoT Sensor & Camera Simulator
 if [ "$1" == "--with-sim" ] || [ "$1" == "--with-cameras" ] || [ "$1" == "--with-devices" ] || [ "$ENABLE_SIMULATOR" == "true" ]; then
@@ -178,12 +207,13 @@ fi
 echo "=========================================================="
 echo " 🚀 BUILDTRACK SYSTEM IS FULLY OPERATIONAL"
 echo "=========================================================="
-echo " • API & Swagger Docs: http://localhost:8000/docs"
-echo " • ReDoc:             http://localhost:8000/redoc"
-echo " • WebSocket Server:   ws://localhost:8000/socket.io"
-echo " • Liveness Health:    http://localhost:8000/health/live"
-echo " • Readiness Health:   http://localhost:8000/health/ready"
-echo " • Prometheus Metrics: http://localhost:8000/metrics"
+echo " • Frontend Control Room: http://localhost:3000"
+echo " • API & Swagger Docs:    http://localhost:8000/docs"
+echo " • ReDoc:                 http://localhost:8000/redoc"
+echo " • WebSocket Server:       ws://localhost:8000/socket.io"
+echo " • Liveness Health:        http://localhost:8000/health/live"
+echo " • Readiness Health:       http://localhost:8000/health/ready"
+echo " • Prometheus Metrics:     http://localhost:8000/metrics"
 echo "=========================================================="
 echo " Tip: Run './start.sh --with-sim' to also launch the camera feeds & IoT simulator (:8090)."
 echo " Press Ctrl+C at any time to cleanly stop all services."
